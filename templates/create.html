@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Create Game</title>
+    <style>
+        body {
+            background-color: #111;
+            color: #fff;
+            font-family: Arial, sans-serif;
+            text-align: center;
+            padding: 50px;
+        }
+        form {
+            background-color: #222;
+            padding: 30px;
+            border-radius: 10px;
+            display: inline-block;
+        }
+        input[type="text"], input[type="password"], input[type="file"] {
+            font-size: 18px;
+            padding: 10px;
+            margin: 10px;
+            width: 300px;
+        }
+        button {
+            font-size: 18px;
+            padding: 10px 30px;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Create New Basketball Game</h1>
+    <form action="/create" method="post" enctype="multipart/form-data">
+        <input type="text" name="game_code" placeholder="Game Code (e.g. ABC123)" required><br>
+        <input type="password" name="password" placeholder="Set Control Password" required><br>
+
+        <input type="text" name="home_name" placeholder="Home Team Name"><br>
+        <input type="file" name="home_logo" accept="image/*"><br>
+
+        <input type="text" name="away_name" placeholder="Away Team Name"><br>
+        <input type="file" name="away_logo" accept="image/*"><br>
+
+        <button type="submit">Create Game</button>
+    </form>
+
+</body>
+</html>

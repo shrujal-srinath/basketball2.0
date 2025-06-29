@@ -1,100 +1,117 @@
-<!-- ✅ templates/display.html -->
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Live Scoreboard</title>
-    <link rel="stylesheet" href="/static/style.css">
+    <meta charset="UTF-8">
+    <title>Live Scoreboard - {{ game.code }}</title>
+    <script src="https://cdn.socket.io/4.3.2/socket.io.min.js"></script>
     <style>
         body {
-            background: black;
-            color: white;
-            font-family: 'Arial Black', sans-serif;
+            margin: 0;
+            background: #000;
+            color: #fff;
+            font-family: 'Arial', sans-serif;
             text-align: center;
-            padding: 2rem;
         }
         .scoreboard {
-            display: grid;
-            grid-template-columns: 1fr auto 1fr;
+            display: flex;
+            justify-content: space-around;
             align-items: center;
-            gap: 2rem;
-            font-size: 3rem;
+            padding: 20px;
         }
-        .logo img {
-            height: 100px;
+        .team {
+            flex: 1;
+            padding: 10px;
         }
-        .clock {
-            font-size: 6rem;
+        .team-logo {
+            max-height: 100px;
+        }
+        .team-name {
+            font-size: 2em;
+            margin-top: 10px;
+        }
+        .score {
+            font-size: 6em;
+            font-weight: bold;
+        }
+        .info-row {
+            display: flex;
+            justify-content: center;
+            gap: 40px;
+            font-size: 2em;
+            margin-top: 20px;
+        }
+        .clocks {
+            margin-top: 30px;
+        }
+        .game-clock {
+            font-size: 5em;
         }
         .shot-clock {
-            font-size: 4rem;
-            color: orange;
+            font-size: 3em;
+            color: yellow;
         }
-        .flash {
-            animation: flash-red 1s steps(2, start) infinite;
-        }
-        @keyframes flash-red {
-            0% { background: black; }
-            50% { background: red; }
-            100% { background: black; }
+        .buzzer-flash {
+            background-color: red !important;
+            transition: background-color 0.3s ease;
         }
     </style>
 </head>
 <body>
+
     <div class="scoreboard">
-        <div class="logo">
-            {% if game.home_logo %}<img src="/{{ game.home_logo }}">{% endif %}
-            <div>{{ game.home_name }}</div>
-            <div id="home_score">{{ game.home_score }}</div>
+        <div class="team" id="home_team">
+            {% if game.home_logo %}
+                <img class="team-logo" src="{{ game.home_logo }}" alt="Home Logo">
+            {% endif %}
+            <div class="team-name" id="home_name">{{ game.home_name }}</div>
+            <div class="score" id="home_score">{{ game.home_score }}</div>
+            <div class="info-row">
+                <div>Fouls: <span id="home_fouls">{{ game.home_fouls }}</span></div>
+                <div>TO: <span id="home_timeouts">{{ game.home_timeouts }}</span></div>
+            </div>
         </div>
-        <div>
-            <div id="game_clock" class="clock">{{ game.game_clock }}</div>
-            <div id="shot_clock" class="shot-clock">{{ game.shot_clock }}</div>
+
+        <div class="clocks" id="clocks">
+            <div class="game-clock" id="game_clock_display">{{ game.game_clock }}</div>
+            <div class="shot-clock" id="shot_clock_display">{{ game.shot_clock }}</div>
+            <div>Period: <span id="period">{{ game.period }}</span></div>
         </div>
-        <div class="logo">
-            {% if game.away_logo %}<img src="/{{ game.away_logo }}">{% endif %}
-            <div>{{ game.away_name }}</div>
-            <div id="away_score">{{ game.away_score }}</div>
+
+        <div class="team" id="away_team">
+            {% if game.away_logo %}
+                <img class="team-logo" src="{{ game.away_logo }}" alt="Away Logo">
+            {% endif %}
+            <div class="team-name" id="away_name">{{ game.away_name }}</div>
+            <div class="score" id="away_score">{{ game.away_score }}</div>
+            <div class="info-row">
+                <div>Fouls: <span id="away_fouls">{{ game.away_fouls }}</span></div>
+                <div>TO: <span id="away_timeouts">{{ game.away_timeouts }}</span></div>
+            </div>
         </div>
     </div>
 
-    <audio id="buzzer" src="/static/buzzer.mp3"></audio>
+    <audio id="buzzer" src="/static/buzzer.mp3" preload="auto"></audio>
 
-    <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
     <script>
         const socket = io();
-        const code = "{{ game.code }}";
-        const buzzer = document.getElementById('buzzer');
-        const gameClockEl = document.getElementById('game_clock');
-        const shotClockEl = document.getElementById('shot_clock');
+        const gameCode = "{{ game.code }}";
+        socket.emit("join", gameCode);
 
-        socket.emit('join', { code });
-
-        socket.on('game_updated', data => {
-            const u = data.updates;
-
-            if (u.home_score !== undefined) document.getElementById('home_score').textContent = u.home_score;
-            if (u.away_score !== undefined) document.getElementById('away_score').textContent = u.away_score;
-
-            if (u.game_clock !== undefined) {
-                gameClockEl.textContent = u.game_clock;
-                if (u.game_clock === '00:00') {
-                    gameClockEl.classList.add('flash');
-                    buzzer.play();
-                } else {
-                    gameClockEl.classList.remove('flash');
-                }
-            }
-
-            if (u.shot_clock !== undefined) {
-                shotClockEl.textContent = u.shot_clock;
-                if (u.shot_clock === 0) {
-                    shotClockEl.classList.add('flash');
-                    buzzer.play();
-                } else {
-                    shotClockEl.classList.remove('flash');
-                }
+        socket.on("refresh", (data) => {
+            for (let key in data) {
+                const el = document.getElementById(key);
+                if (el) el.innerText = data[key];
             }
         });
+
+        socket.on("buzzer", () => {
+            const buzzer = document.getElementById("buzzer");
+            buzzer.play();
+            const clocks = document.getElementById("clocks");
+            clocks.classList.add("buzzer-flash");
+            setTimeout(() => clocks.classList.remove("buzzer-flash"), 800);
+        });
     </script>
+
 </body>
 </html>

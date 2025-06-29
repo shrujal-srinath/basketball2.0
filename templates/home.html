@@ -1,41 +1,29 @@
-<!-- templates/home.html -->
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Basketball Scoreboard</title>
-    <link rel="stylesheet" href="/static/style.css">
+  <meta charset="UTF-8">
+  <title>Basketball Scoreboard</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      text-align: center;
+      margin-top: 100px;
+    }
+    a {
+      display: inline-block;
+      margin: 20px;
+      padding: 15px 30px;
+      background-color: #007BFF;
+      color: white;
+      text-decoration: none;
+      border-radius: 8px;
+      font-size: 20px;
+    }
+  </style>
 </head>
 <body>
-    <h1>🏀 Basketball Scoreboard</h1>
-
-    <h2>Create Game</h2>
-    <form action="/create" method="POST" enctype="multipart/form-data">
-        <label>Game Code:</label>
-        <input type="text" name="game_code" required><br><br>
-        <label>Home Logo:</label>
-        <input type="file" name="home_logo"><br><br>
-        <label>Away Logo:</label>
-        <input type="file" name="away_logo"><br><br>
-        <button type="submit">Create & Control Game</button>
-    </form>
-
-    <hr>
-
-    <h2>Watch Game</h2>
-    <form action="/watch" method="GET" onsubmit="goToWatch(event)">
-        <label>Enter Game Code:</label>
-        <input type="text" id="watch_code" required>
-        <button type="submit">Watch</button>
-    </form>
-
-    <script>
-        function goToWatch(e) {
-            e.preventDefault();
-            const code = document.getElementById('watch_code').value.trim().toUpperCase();
-            if (code) {
-                window.location.href = `/watch/${code}`;
-            }
-        }
-    </script>
+  <h1>🏀 Basketball Scoreboard</h1>
+  <a href="/create_form">Create Game</a>
+  <a href="/watch_form">Watch Game</a>
 </body>
 </html>

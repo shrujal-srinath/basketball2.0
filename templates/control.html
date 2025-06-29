@@ -1,67 +1,172 @@
-<!-- ✅ Updated templates/control.html -->
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Control Panel</title>
-    <link rel="stylesheet" href="/static/style.css">
+    <meta charset="UTF-8">
+    <title>Control Panel - {{ game.code }}</title>
+    <script src="https://cdn.socket.io/4.3.2/socket.io.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; background: #111; color: #fff; }
+        .scoreboard { display: flex; justify-content: space-around; margin-top: 30px; }
+        .team { border: 1px solid #444; padding: 20px; border-radius: 10px; width: 40%; background: #222; }
+        .team img { max-width: 80px; margin-bottom: 10px; }
+        .controls button { margin: 5px; padding: 10px 15px; font-size: 16px; }
+        .clock-section { margin: 30px auto; }
+        .clock { font-size: 48px; font-weight: bold; margin: 10px; }
+        input.clock-input { width: 80px; font-size: 24px; text-align: center; }
+        select { font-size: 18px; }
+    </style>
 </head>
 <body>
-    <h1>Control Panel - Game {{ game.code }}</h1>
 
-    <div class="logos">
-        {% if game.home_logo %}<img src="/{{ game.home_logo }}" height="80">{% endif %}
-        <strong>{{ game.home_name }}</strong> vs <strong>{{ game.away_name }}</strong>
-        {% if game.away_logo %}<img src="/{{ game.away_logo }}" height="80">{% endif %}
+    <h1>Control Panel – Game Code: {{ game.code }}</h1>
+
+    <div class="scoreboard">
+        <div class="team" id="home">
+            <img src="{{ game.home_logo }}" alt="Home Logo"><br>
+            <strong><input id="home_name" value="{{ game.home_name }}"></strong><br><br>
+            Score: <span id="home_score">{{ game.home_score }}</span><br>
+            <div class="controls">
+                <button onclick="change('home_score', 1)">+1</button>
+                <button onclick="change('home_score', 2)">+2</button>
+                <button onclick="change('home_score', 3)">+3</button>
+                <button onclick="change('home_score', -1)">-1</button>
+            </div>
+            Fouls: <span id="home_fouls">{{ game.home_fouls }}</span><br>
+            <button onclick="change('home_fouls', 1)">+1 Foul</button>
+            <button onclick="change('home_fouls', -1)">-1 Foul</button><br>
+            Timeouts: <span id="home_timeouts">{{ game.home_timeouts }}</span><br>
+            <button onclick="change('home_timeouts', 1)">+1 TO</button>
+            <button onclick="change('home_timeouts', -1)">-1 TO</button>
+        </div>
+
+        <div class="team" id="away">
+            <img src="{{ game.away_logo }}" alt="Away Logo"><br>
+            <strong><input id="away_name" value="{{ game.away_name }}"></strong><br><br>
+            Score: <span id="away_score">{{ game.away_score }}</span><br>
+            <div class="controls">
+                <button onclick="change('away_score', 1)">+1</button>
+                <button onclick="change('away_score', 2)">+2</button>
+                <button onclick="change('away_score', 3)">+3</button>
+                <button onclick="change('away_score', -1)">-1</button>
+            </div>
+            Fouls: <span id="away_fouls">{{ game.away_fouls }}</span><br>
+            <button onclick="change('away_fouls', 1)">+1 Foul</button>
+            <button onclick="change('away_fouls', -1)">-1 Foul</button><br>
+            Timeouts: <span id="away_timeouts">{{ game.away_timeouts }}</span><br>
+            <button onclick="change('away_timeouts', 1)">+1 TO</button>
+            <button onclick="change('away_timeouts', -1)">-1 TO</button>
+        </div>
+    </div>
+
+    <div class="clock-section">
+        Game Clock: <input class="clock-input" id="game_clock" value="{{ game.game_clock }}">
+        <button onclick="startClock('game')">Start</button>
+        <button onclick="pauseClock('game')">Pause</button>
+        <button onclick="resetClock('game', '10:00')">Reset</button>
+        <div class="clock" id="game_clock_display">{{ game.game_clock }}</div>
+
+        Shot Clock: <input class="clock-input" id="shot_clock" value="{{ game.shot_clock }}">
+        <button onclick="startClock('shot')">Start</button>
+        <button onclick="pauseClock('shot')">Pause</button>
+        <button onclick="resetClock('shot', '24')">Reset</button>
+        <div class="clock" id="shot_clock_display">{{ game.shot_clock }}</div>
     </div>
 
     <div>
-        Game Clock: <input id="game_clock" value="{{ game.game_clock }}">
-        Shot Clock: <input id="shot_clock" value="{{ game.shot_clock }}">
-        <button onclick="sendClockControl('start')">Start</button>
-        <button onclick="sendClockControl('pause')">Pause</button>
-        <button onclick="sendClockControl('reset')">Reset</button>
+        Period: 
+        <select id="period" onchange="change('period', this.value)">
+            {% for p in range(1, 5) %}
+            <option value="{{ p }}" {% if game.period == p %}selected{% endif %}>{{ p }}</option>
+            {% endfor %}
+        </select>
     </div>
 
-    <div>
-        <label>Home Score: </label><input id="home_score" value="{{ game.home_score }}">
-        <label>Away Score: </label><input id="away_score" value="{{ game.away_score }}">
-        <button onclick="updateScore()">Update Score</button>
-    </div>
+    <audio id="buzzer" src="/static/buzzer.mp3" preload="auto"></audio>
 
-    <div>
-        <button onclick="window.location.href='/end/{{ game.code }}'">End Game</button>
-    </div>
-
-    <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
     <script>
         const socket = io();
-        const code = "{{ game.code }}";
-        socket.emit('join', { code });
+        const gameCode = "{{ game.code }}";
+        socket.emit("join", gameCode);
 
-        socket.on('game_updated', data => {
-            const u = data.updates;
-            if (u.game_clock !== undefined) document.getElementById('game_clock').value = u.game_clock;
-            if (u.shot_clock !== undefined) document.getElementById('shot_clock').value = u.shot_clock;
-            if (u.home_score !== undefined) document.getElementById('home_score').value = u.home_score;
-            if (u.away_score !== undefined) document.getElementById('away_score').value = u.away_score;
+        function change(field, delta) {
+            const el = document.getElementById(field);
+            if (!el) return;
+            let value = parseInt(el.innerText || el.value);
+            value = isNaN(value) ? 0 : value + parseInt(delta);
+            if (value < 0) value = 0;
+            el.innerText = value;
+            socket.emit("update", {
+                code: gameCode,
+                updates: { [field]: value }
+            });
+        }
+
+        function updateClock(type, value) {
+            const updates = {};
+            updates[type + "_clock"] = value;
+            socket.emit("update", {
+                code: gameCode,
+                updates: updates
+            });
+        }
+
+        function startClock(type) {
+            const el = document.getElementById(type + "_clock_display");
+            let time = el.innerText.trim();
+            let total = type === 'game' ? getSeconds(time) : parseInt(time);
+            let id = setInterval(() => {
+                if (total <= 0) {
+                    clearInterval(id);
+                    socket.emit("buzzer", gameCode);
+                    el.innerText = type === 'game' ? "00:00" : "0";
+                    return;
+                }
+                total--;
+                let display = type === 'game' ? toMMSS(total) : total;
+                el.innerText = display;
+                updateClock(type, display);
+            }, 1000);
+            window[type + "ClockInterval"] = id;
+        }
+
+        function pauseClock(type) {
+            clearInterval(window[type + "ClockInterval"]);
+        }
+
+        function resetClock(type, value) {
+            pauseClock(type);
+            document.getElementById(type + "_clock_display").innerText = value;
+            document.getElementById(type + "_clock").value = value;
+            updateClock(type, value);
+        }
+
+        function getSeconds(str) {
+            const parts = str.split(":");
+            return parseInt(parts[0]) * 60 + parseInt(parts[1]);
+        }
+
+        function toMMSS(s) {
+            const m = Math.floor(s / 60).toString().padStart(2, "0");
+            const sec = (s % 60).toString().padStart(2, "0");
+            return `${m}:${sec}`;
+        }
+
+        socket.on("refresh", (data) => {
+            for (let key in data) {
+                let el = document.getElementById(key);
+                if (el) {
+                    if (el.tagName === "INPUT") el.value = data[key];
+                    else el.innerText = data[key];
+                }
+            }
         });
 
-        function updateScore() {
-            socket.emit('update_game', {
-                code,
-                updates: {
-                    home_score: parseInt(document.getElementById('home_score').value),
-                    away_score: parseInt(document.getElementById('away_score').value),
-                }
-            });
-        }
-
-        function sendClockControl(action) {
-            socket.emit('clock_control', {
-                code,
-                action
-            });
-        }
+        socket.on("buzzer", () => {
+            const buzzer = document.getElementById("buzzer");
+            buzzer.play();
+        });
     </script>
+
 </body>
 </html>
