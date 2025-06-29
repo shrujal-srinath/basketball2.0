@@ -16,7 +16,8 @@ socketio = SocketIO(app, async_mode='eventlet')
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///games.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['UPLOAD_FOLDER'] = 'static/logos'
-os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+if not os.path.exists(app.config['UPLOAD_FOLDER']):
+    os.makedirs(app.config['UPLOAD_FOLDER'])
 db = SQLAlchemy(app)
 
 # ✅ Game Model
@@ -35,14 +36,12 @@ class Game(db.Model):
     away_logo = db.Column(db.String(100), default='')
     ended = db.Column(db.Boolean, default=False)
 
-# ✅ Utility to fetch game
 def get_game(code):
     return Game.query.get(code)
 
 # ✅ Timers
 timers = {}
 
-# ✅ Clock Countdown Logic
 def tick(code):
     game = get_game(code)
     if not game:
@@ -87,13 +86,13 @@ def create():
 
     if home_logo:
         filename = secure_filename(home_logo.filename)
-        home_logo.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
         home_logo_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        home_logo.save(home_logo_path)
 
     if away_logo:
         filename = secure_filename(away_logo.filename)
-        away_logo.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
         away_logo_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        away_logo.save(away_logo_path)
 
     game = Game(code=code, home_logo=home_logo_path, away_logo=away_logo_path)
     db.session.add(game)
@@ -193,16 +192,11 @@ def clock_control(data):
             timers[code].cancel()
             del timers[code]
 
-# ✅ Create DB tables explicitly
+# ✅ DB Initialization
 with app.app_context():
     db.create_all()
 
-# ✅ Dynamic port fallback for local, but respects Render PORT env
+# ✅ Deployment-Friendly Run
 if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 0))
-    if port == 0:
-        sock = socket.socket()
-        sock.bind(('', 0))
-        _, port = sock.getsockname()
-        sock.close()
+    port = int(os.environ.get('PORT', 5000))
     socketio.run(app, host='0.0.0.0', port=port)
