@@ -14,8 +14,16 @@ app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///instance/games.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 socketio = SocketIO(app, async_mode='eventlet')
 
-# --- Ensure upload folder exists ---
-os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+# --- Ensure upload folder exists robustly (fixes FileExistsError) ---
+upload_dir = app.config['UPLOAD_FOLDER']
+if os.path.exists(upload_dir):
+    if not os.path.isdir(upload_dir):
+        os.remove(upload_dir)
+        os.makedirs(upload_dir)
+else:
+    os.makedirs(upload_dir)
+
+# --- Ensure database folder exists ---
 os.makedirs("instance", exist_ok=True)
 
 # --- DB Setup ---
@@ -143,7 +151,7 @@ def on_update(data):
 def on_buzzer(data):
     emit('buzzer', {}, to=data['code'])
 
-# --- Dynamic Port Handling ---
+# --- Dynamic Port Handling for local + Render support ---
 
 def find_free_port(start_port=5000, max_tries=10):
     for port in range(start_port, start_port + max_tries):
