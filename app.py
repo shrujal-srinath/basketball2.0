@@ -1,151 +1,158 @@
-from flask import Flask, render_template, request, redirect, url_for, session
-from flask_sqlalchemy import SQLAlchemy
-from flask_socketio import SocketIO, emit, join_room
 import os
+import uuid
+import socket
+from flask import Flask, render_template, request, redirect, session, url_for, send_from_directory, flash
+from flask_socketio import SocketIO, emit, join_room
+from flask_sqlalchemy import SQLAlchemy
 from werkzeug.utils import secure_filename
 
+# --- Flask setup ---
 app = Flask(__name__)
-app.secret_key = "super_secret_key"
+app.secret_key = 'super_secret_key'
+app.config['UPLOAD_FOLDER'] = 'static/uploads'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///instance/games.db'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+socketio = SocketIO(app, async_mode='eventlet')
 
-# ✅ Store DB in root so Render can write to it
-app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///games.db"
+# --- Ensure upload folder exists ---
+os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+os.makedirs("instance", exist_ok=True)
 
-# ✅ Uploads folder in /static (safe)
-app.config["UPLOAD_FOLDER"] = os.path.join("static", "uploads")
-upload_folder = app.config["UPLOAD_FOLDER"]
-if not os.path.exists(upload_folder):
-    os.makedirs(upload_folder)
-
+# --- DB Setup ---
 db = SQLAlchemy(app)
-socketio = SocketIO(app)
 
-# ✅ Game model with full scoreboard fields
 class Game(db.Model):
     code = db.Column(db.String(10), primary_key=True)
+    home_team = db.Column(db.String(50))
+    away_team = db.Column(db.String(50))
     home_score = db.Column(db.Integer, default=0)
     away_score = db.Column(db.Integer, default=0)
     home_fouls = db.Column(db.Integer, default=0)
     away_fouls = db.Column(db.Integer, default=0)
-    home_timeouts = db.Column(db.Integer, default=3)
-    away_timeouts = db.Column(db.Integer, default=3)
     period = db.Column(db.Integer, default=1)
-    home_name = db.Column(db.String(50), default="Home")
-    away_name = db.Column(db.String(50), default="Away")
-    game_clock = db.Column(db.String(5), default="10:00")
-    shot_clock = db.Column(db.String(2), default="24")
+    game_clock = db.Column(db.String(10), default='10:00')
+    shot_clock = db.Column(db.String(5), default='24')
     home_logo = db.Column(db.String(200), nullable=True)
     away_logo = db.Column(db.String(200), nullable=True)
-    ended = db.Column(db.Boolean, default=False)
+    password = db.Column(db.String(50), nullable=True)
 
-    def to_dict(self):
-        return {c.name: getattr(self, c.name) for c in self.__table__.columns}
+with app.app_context():
+    db.create_all()
 
-# 🔁 Load game from DB
-def get_game(code):
-    return db.session.get(Game, code)
+# --- Routes ---
 
-@app.route("/")
+@app.route('/')
 def home():
-    return render_template("index.html")
+    return render_template('home.html')
 
-@app.route("/create", methods=["GET", "POST"])
+@app.route('/create', methods=['GET', 'POST'])
 def create():
-    if request.method == "POST":
-        code = request.form["game_code"].strip().upper()
-        password = request.form["password"]
-        home_name = request.form.get("home_name", "Home")
-        away_name = request.form.get("away_name", "Away")
+    if request.method == 'POST':
+        code = request.form['code'].strip().lower()
+        if Game.query.get(code):
+            return "Game code already exists"
+        
+        home_team = request.form['home_team']
+        away_team = request.form['away_team']
+        password = request.form.get('password', '')
+        
+        # Handle logo upload
+        home_logo = request.files.get('home_logo')
+        away_logo = request.files.get('away_logo')
+        home_logo_path = save_logo(home_logo, code + '_home') if home_logo else None
+        away_logo_path = save_logo(away_logo, code + '_away') if away_logo else None
 
-        if not code or get_game(code):
-            return "Invalid or duplicate game code. <a href='/create'>Try again</a>"
-
-        home_logo = request.files.get("home_logo")
-        away_logo = request.files.get("away_logo")
-
-        home_logo_path = None
-        away_logo_path = None
-
-        if home_logo:
-            filename = secure_filename(home_logo.filename)
-            relative_path = f"static/uploads/{code}_home_{filename}"
-            full_path = os.path.join(app.root_path, relative_path)
-            home_logo.save(full_path)
-            home_logo_path = "/" + relative_path  # web-safe
-
-        if away_logo:
-            filename = secure_filename(away_logo.filename)
-            relative_path = f"static/uploads/{code}_away_{filename}"
-            full_path = os.path.join(app.root_path, relative_path)
-            away_logo.save(full_path)
-            away_logo_path = "/" + relative_path  # web-safe
-
-        game = Game(
-            code=code,
-            home_name=home_name,
-            away_name=away_name,
-            home_logo=home_logo_path,
-            away_logo=away_logo_path,
-        )
+        game = Game(code=code, home_team=home_team, away_team=away_team,
+                    home_logo=home_logo_path, away_logo=away_logo_path,
+                    password=password)
         db.session.add(game)
         db.session.commit()
+        session[code] = password
+        return redirect(url_for('control', code=code))
+    return render_template('create.html')
 
-        session["game_code"] = code
-        session["password"] = password
-        return redirect(url_for("control", code=code))
-    return render_template("create.html")
-
-@app.route("/watch", methods=["GET", "POST"])
+@app.route('/watch', methods=['GET', 'POST'])
 def watch():
-    if request.method == "POST":
-        code = request.form["game_code"].strip().upper()
-        game = get_game(code)
-        if not game:
-            return render_template("watch.html", error="Invalid game code.")
-        return redirect(url_for("display", code=code))
-    return render_template("watch.html")
+    if request.method == 'POST':
+        code = request.form['code'].strip().lower()
+        game = Game.query.get(code)
+        if game:
+            return redirect(url_for('display', code=code))
+        else:
+            return "Invalid game code."
+    return render_template('watch.html')
 
-@app.route("/control/<code>")
+@app.route('/control/<code>', methods=['GET', 'POST'])
 def control(code):
-    game = get_game(code)
+    game = Game.query.get(code)
     if not game:
-        return "Game not found."
+        return "Game not found"
+    if session.get(code) != game.password:
+        if request.method == 'POST':
+            password = request.form.get('password')
+            if password == game.password:
+                session[code] = password
+                return redirect(url_for('control', code=code))
+            else:
+                flash("Incorrect password")
+        return render_template('password.html', code=code)
+    return render_template('control.html', code=code, game=game)
 
-    if "password" not in session or session.get("game_code") != code:
-        return redirect(url_for("home"))
-    return render_template("control.html", game=game)
-
-@app.route("/display/<code>")
+@app.route('/display/<code>')
 def display(code):
-    game = get_game(code)
+    game = Game.query.get(code)
     if not game:
-        return "Game not found."
-    return render_template("display.html", game=game)
+        return "Game not found"
+    return render_template('display.html', code=code, game=game)
 
-# 🧠 Real-time Sync
-@socketio.on("update")
-def handle_update(data):
-    code = data.get("code")
-    updates = data.get("updates")
-    game = get_game(code)
+@app.route('/uploads/<filename>')
+def uploaded_file(filename):
+    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+
+def save_logo(file, prefix):
+    if file and file.filename:
+        filename = secure_filename(prefix + '_' + file.filename)
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        file.save(filepath)
+        return '/' + filepath
+    return None
+
+# --- SocketIO Events ---
+
+@socketio.on('join')
+def on_join(data):
+    room = data['code']
+    join_room(room)
+
+@socketio.on('update')
+def on_update(data):
+    room = data['code']
+    game = Game.query.get(room)
     if game:
-        for key, value in updates.items():
-            setattr(game, key, value)
+        game.home_score = data['home_score']
+        game.away_score = data['away_score']
+        game.home_fouls = data['home_fouls']
+        game.away_fouls = data['away_fouls']
+        game.period = data['period']
+        game.game_clock = data['game_clock']
+        game.shot_clock = data['shot_clock']
         db.session.commit()
-        emit("refresh", game.to_dict(), room=code)
+        emit('update', data, to=room)
 
-@socketio.on("join")
-def handle_join(code):
-    join_room(code)
-    game = get_game(code)
-    if game:
-        emit("refresh", game.to_dict(), room=code)
+@socketio.on('buzzer')
+def on_buzzer(data):
+    emit('buzzer', {}, to=data['code'])
 
-@socketio.on("buzzer")
-def buzzer(code):
-    emit("buzzer", room=code)
+# --- Dynamic Port Handling ---
 
-# ✅ Final launch command (Render-friendly)
-if __name__ == "__main__":
-    with app.app_context():
-        db.create_all()
-    socketio.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
+def find_free_port(start_port=5000, max_tries=10):
+    for port in range(start_port, start_port + max_tries):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            if s.connect_ex(("127.0.0.1", port)) != 0:
+                return port
+    raise OSError("No free ports available")
+
+if __name__ == '__main__':
+    selected_port = int(os.environ.get("PORT", find_free_port()))
+    print(f"✅ Starting app on port {selected_port}")
+    socketio.run(app, host='0.0.0.0', port=selected_port)
