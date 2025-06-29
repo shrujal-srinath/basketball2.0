@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, session, send_from_directory
+from flask import Flask, render_template, request, redirect, url_for, session
 from flask_sqlalchemy import SQLAlchemy
 from flask_socketio import SocketIO, emit, join_room
 import os
@@ -6,22 +6,20 @@ from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
 app.secret_key = "super_secret_key"
-app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///instance/games.db"
-app.config["UPLOAD_FOLDER"] = os.path.join("static", "uploads")
-# Old version (causing the error)
-# os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
 
-# ✅ Safe version
+# ✅ Store DB in root so Render can write to it
+app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///games.db"
+
+# ✅ Uploads folder in /static (safe)
+app.config["UPLOAD_FOLDER"] = os.path.join("static", "uploads")
 upload_folder = app.config["UPLOAD_FOLDER"]
 if not os.path.exists(upload_folder):
     os.makedirs(upload_folder)
 
-os.makedirs("instance", exist_ok=True)
-
 db = SQLAlchemy(app)
 socketio = SocketIO(app)
 
-# Game model
+# ✅ Game model with full scoreboard fields
 class Game(db.Model):
     code = db.Column(db.String(10), primary_key=True)
     home_score = db.Column(db.Integer, default=0)
@@ -42,7 +40,7 @@ class Game(db.Model):
     def to_dict(self):
         return {c.name: getattr(self, c.name) for c in self.__table__.columns}
 
-# Load game from DB
+# 🔁 Load game from DB
 def get_game(code):
     return db.session.get(Game, code)
 
@@ -72,14 +70,14 @@ def create():
             relative_path = f"static/uploads/{code}_home_{filename}"
             full_path = os.path.join(app.root_path, relative_path)
             home_logo.save(full_path)
-            home_logo_path = "/" + relative_path  # For use in <img src="...">
+            home_logo_path = "/" + relative_path  # web-safe
 
         if away_logo:
             filename = secure_filename(away_logo.filename)
             relative_path = f"static/uploads/{code}_away_{filename}"
             full_path = os.path.join(app.root_path, relative_path)
             away_logo.save(full_path)
-            away_logo_path = "/" + relative_path  # For use in <img src="...">
+            away_logo_path = "/" + relative_path  # web-safe
 
         game = Game(
             code=code,
@@ -106,7 +104,7 @@ def watch():
         return redirect(url_for("display", code=code))
     return render_template("watch.html")
 
-@app.route("/control/<code>", methods=["GET", "POST"])
+@app.route("/control/<code>")
 def control(code):
     game = get_game(code)
     if not game:
@@ -123,6 +121,7 @@ def display(code):
         return "Game not found."
     return render_template("display.html", game=game)
 
+# 🧠 Real-time Sync
 @socketio.on("update")
 def handle_update(data):
     code = data.get("code")
@@ -145,6 +144,7 @@ def handle_join(code):
 def buzzer(code):
     emit("buzzer", room=code)
 
+# ✅ Final launch command (Render-friendly)
 if __name__ == "__main__":
     with app.app_context():
         db.create_all()
