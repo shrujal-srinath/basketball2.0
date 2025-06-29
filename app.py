@@ -1,33 +1,29 @@
-from flask import Flask, render_template, request, redirect, session, url_for, flash, send_from_directory
+from flask import Flask, render_template, request, redirect, url_for, session, send_from_directory
 from flask_socketio import SocketIO, emit, join_room
 from flask_sqlalchemy import SQLAlchemy
-import os
 from werkzeug.utils import secure_filename
+import os
+import uuid
+import datetime
 
 app = Flask(__name__)
 app.secret_key = 'super_secret_key'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///game.db'
+app.config['UPLOAD_FOLDER'] = 'static/uploads'
 socketio = SocketIO(app)
 
-# === DATABASE PATH FIX ===
-if os.environ.get('RENDER'):
-    db_path = '/tmp/games.db'  # Only writable folder on Render
-else:
-    db_path = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'games.db')
-
-app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['UPLOAD_FOLDER'] = os.path.join('static', 'uploads')
-
-os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+# Safe upload folder creation
+if not os.path.exists(app.config['UPLOAD_FOLDER']):
+    os.makedirs(app.config['UPLOAD_FOLDER'])
 
 db = SQLAlchemy(app)
 
-# === DB MODEL ===
+# --------------------------- Database Model ---------------------------
 class Game(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    code = db.Column(db.String(10), unique=True, nullable=False)
-    home_name = db.Column(db.String(50), default='Home')
-    away_name = db.Column(db.String(50), default='Away')
+    code = db.Column(db.String(6), unique=True, nullable=False)
+    home_name = db.Column(db.String(50), default="Home")
+    away_name = db.Column(db.String(50), default="Away")
     home_score = db.Column(db.Integer, default=0)
     away_score = db.Column(db.Integer, default=0)
     home_fouls = db.Column(db.Integer, default=0)
@@ -35,113 +31,85 @@ class Game(db.Model):
     home_timeouts = db.Column(db.Integer, default=0)
     away_timeouts = db.Column(db.Integer, default=0)
     period = db.Column(db.Integer, default=1)
-    game_clock = db.Column(db.String(10), default='10:00')
-    shot_clock = db.Column(db.String(10), default='24')
-    home_logo = db.Column(db.String(200), default='')
-    away_logo = db.Column(db.String(200), default='')
+    game_clock = db.Column(db.String(10), default="10:00")
+    shot_clock = db.Column(db.String(10), default="24")
+    home_logo = db.Column(db.String(100), nullable=True)
+    away_logo = db.Column(db.String(100), nullable=True)
 
-# === ENSURE DB IS CREATED ===
-try:
-    with app.app_context():
-        db.create_all()
-except Exception as e:
-    print(f"DB Creation Error: {e}")
+# --------------------------- Routes ---------------------------
+@app.before_first_request
+def create_tables():
+    db.create_all()
 
-# === ROUTES ===
 @app.route('/')
-def home():
-    return render_template('home.html')
+def index():
+    return render_template('index.html')
 
 @app.route('/create', methods=['GET', 'POST'])
 def create_game():
     if request.method == 'POST':
-        code = request.form['game_code'].strip().upper()
-        password = request.form['password']
-        if not code or Game.query.filter_by(code=code).first():
-            flash('Invalid or duplicate game code.')
-            return redirect(url_for('create_game'))
-
+        code = request.form['code'].strip().upper()
+        password = request.form['password'].strip()
+        if not code or not password:
+            return "Missing code or password"
+        if Game.query.filter_by(code=code).first():
+            return "Game code already exists."
         new_game = Game(code=code)
         db.session.add(new_game)
         db.session.commit()
-        session['auth'] = code + password
+        session['game_code'] = code
+        session['password'] = password
         return redirect(url_for('control', code=code))
+    return render_template('create.html')
 
-    return render_template('create_game.html')
+@app.route('/watch', methods=['GET', 'POST'])
+def watch_game():
+    if request.method == 'POST':
+        code = request.form['code'].strip().upper()
+        if not Game.query.filter_by(code=code).first():
+            return "Invalid game code."
+        return redirect(url_for('display', code=code))
+    return render_template('watch.html')
 
-@app.route('/control/<code>', methods=['GET'])
+@app.route('/control/<code>', methods=['GET', 'POST'])
 def control(code):
     game = Game.query.filter_by(code=code).first()
     if not game:
-        return 'Invalid game code', 404
+        return "Game not found."
     return render_template('control.html', game=game)
 
 @app.route('/display/<code>')
 def display(code):
     game = Game.query.filter_by(code=code).first()
     if not game:
-        return 'Invalid game code', 404
+        return "Game not found."
     return render_template('display.html', game=game)
-
-@app.route('/watch', methods=['GET', 'POST'])
-def watch():
-    if request.method == 'POST':
-        code = request.form['game_code'].strip().upper()
-        game = Game.query.filter_by(code=code).first()
-        if game:
-            return redirect(url_for('display', code=code))
-        else:
-            flash('Invalid Game Code')
-            return redirect(url_for('watch'))
-    return render_template('watch.html')
 
 @app.route('/upload_logo/<team>/<code>', methods=['POST'])
 def upload_logo(team, code):
     game = Game.query.filter_by(code=code).first()
     if not game:
-        return 'Invalid game code', 404
+        return "Game not found."
 
     file = request.files['logo']
     if file:
         filename = secure_filename(file.filename)
         filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         file.save(filepath)
+        rel_path = os.path.relpath(filepath, 'static')
 
         if team == 'home':
-            game.home_logo = '/' + filepath
-        elif team == 'away':
-            game.away_logo = '/' + filepath
+            game.home_logo = rel_path
+        else:
+            game.away_logo = rel_path
 
         db.session.commit()
-        emit('update', {'game': game_as_dict(game)}, room=code, namespace='/')
+        socketio.emit('update', get_game_state(game), to=code)
         return redirect(url_for('control', code=code))
+    return "No file uploaded."
 
-    return 'No file uploaded', 400
-
-# === SOCKET EVENTS ===
-@socketio.on('join')
-def on_join(data):
-    code = data['code']
-    join_room(code)
-
-@socketio.on('update')
-def on_update(data):
-    code = data['code']
-    game = Game.query.filter_by(code=code).first()
-    if game:
-        for key in data:
-            if hasattr(game, key):
-                setattr(game, key, data[key])
-        db.session.commit()
-        emit('update', {'game': game_as_dict(game)}, room=code)
-
-@socketio.on('buzzer')
-def on_buzzer(data):
-    code = data['code']
-    emit('buzzer', {}, room=code)
-
-# === HELPER ===
-def game_as_dict(game):
+# --------------------------- Helpers ---------------------------
+def get_game_state(game):
     return {
         'home_name': game.home_name,
         'away_name': game.away_name,
@@ -159,6 +127,26 @@ def game_as_dict(game):
         'code': game.code
     }
 
-# === MAIN ===
+# --------------------------- Socket Events ---------------------------
+@socketio.on('join')
+def on_join(data):
+    join_room(data['code'])
+
+@socketio.on('update')
+def handle_update(data):
+    game = Game.query.filter_by(code=data['code']).first()
+    if not game:
+        return
+    for key, value in data.items():
+        if hasattr(game, key) and key != 'code':
+            setattr(game, key, value)
+    db.session.commit()
+    emit('update', get_game_state(game), to=game.code)
+
+@socketio.on('buzzer')
+def handle_buzzer(data):
+    emit('buzzer', {'type': data['type']}, to=data['code'])
+
+# --------------------------- Main ---------------------------
 if __name__ == '__main__':
-    socketio.run(app, host='0.0.0.0', port=int(os.environ.get("PORT", 5000)))
+    socketio.run(app, debug=True)
