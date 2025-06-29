@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Control Panel</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
+</head>
+<body>
+  <h1>Control Panel for Game: {{ game_code }}</h1>
+
+  <div>
+    <label>Home Team: </label>
+    <button onclick="update('home_score', 1)">+1</button>
+    <button onclick="update('home_score', -1)">-1</button>
+  </div>
+
+  <div>
+    <label>Away Team: </label>
+    <button onclick="update('away_score', 1)">+1</button>
+    <button onclick="update('away_score', -1)">-1</button>
+  </div>
+
+  <div>
+    <button onclick="startClock()">Start Clock</button>
+    <button onclick="pauseClock()">Pause Clock</button>
+    <button onclick="resetClock()">Reset Clock</button>
+  </div>
+
+  <script>
+    const socket = io();
+
+    function update(field, change) {
+      socket.emit('update_score', {
+        game_code: "{{ game_code }}",
+        field: field,
+        change: change
+      });
+    }
+
+    function startClock() {
+      socket.emit('clock_control', { action: 'start', game_code: "{{ game_code }}" });
+    }
+
+    function pauseClock() {
+      socket.emit('clock_control', { action: 'pause', game_code: "{{ game_code }}" });
+    }
+
+    function resetClock() {
+      socket.emit('clock_control', { action: 'reset', game_code: "{{ game_code }}" });
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Scoreboard Display</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='static.css') }}">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
+</head>
+<body>
+  <div class="scoreboard">
+    <h1 id="clock">00:00</h1>
+    <div class="teams">
+      <div>
+        <h2 id="home_name">Home</h2>
+        <h3 id="home_score">0</h3>
+      </div>
+      <div>
+        <h2 id="away_name">Away</h2>
+        <h3 id="away_score">0</h3>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const socket = io();
+    const gameCode = "{{ game_code }}";
+
+    socket.on('connect', () => {
+      socket.emit('join_game', { game_code: gameCode });
+    });
+
+    socket.on('update_display', data => {
+      if (data.home_score !== undefined) document.getElementById('home_score').innerText = data.home_score;
+      if (data.away_score !== undefined) document.getElementById('away_score').innerText = data.away_score;
+      if (data.clock !== undefined) document.getElementById('clock').innerText = data.clock;
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html>
+<head><title>Basketball Scoreboard</title></head>
+<body>
+  <h1>Welcome</h1>
+  <form action="/create" method="post">
+    <input type="text" name="game_code" placeholder="Enter Game Code">
+    <button type="submit">Create Game</button>
+  </form>
+
+  <form action="" onsubmit="event.preventDefault(); window.location.href='/display/' + document.getElementById('view_code').value;">
+    <input type="text" id="view_code" placeholder="Enter Game Code to Watch">
+    <button type="submit">Watch Game</button>
+  </form>
+</body>
+</html>
