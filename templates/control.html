@@ -1,91 +1,67 @@
+<!-- ✅ Updated templates/control.html -->
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Control Panel</title>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
+    <title>Control Panel</title>
+    <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-  <h1>Control Panel for Game: {{ game_code }}</h1>
+    <h1>Control Panel - Game {{ game.code }}</h1>
 
-  <!-- Game Clock Controls -->
-  <h3>Game Clock: <span id="clock">00:00</span></h3>
-  <div>
-    <button onclick="startClock()">Start</button>
-    <button onclick="pauseClock()">Pause</button>
-    <button onclick="resetClock()">Reset</button>
-  </div>
+    <div class="logos">
+        {% if game.home_logo %}<img src="/{{ game.home_logo }}" height="80">{% endif %}
+        <strong>{{ game.home_name }}</strong> vs <strong>{{ game.away_name }}</strong>
+        {% if game.away_logo %}<img src="/{{ game.away_logo }}" height="80">{% endif %}
+    </div>
 
-  <!-- Shot Clock Controls -->
-  <h3>Shot Clock: <span id="shot_clock">24</span></h3>
-  <div>
-    <button onclick="startShotClock()">Start</button>
-    <button onclick="pauseShotClock()">Pause</button>
-    <button onclick="resetShotClock()">Reset</button>
-  </div>
+    <div>
+        Game Clock: <input id="game_clock" value="{{ game.game_clock }}">
+        Shot Clock: <input id="shot_clock" value="{{ game.shot_clock }}">
+        <button onclick="sendClockControl('start')">Start</button>
+        <button onclick="sendClockControl('pause')">Pause</button>
+        <button onclick="sendClockControl('reset')">Reset</button>
+    </div>
 
-  <!-- Score Controls -->
-  <h3>Home Team</h3>
-  <button onclick="update('home_score', 1)">+1</button>
-  <button onclick="update('home_score', -1)">-1</button>
+    <div>
+        <label>Home Score: </label><input id="home_score" value="{{ game.home_score }}">
+        <label>Away Score: </label><input id="away_score" value="{{ game.away_score }}">
+        <button onclick="updateScore()">Update Score</button>
+    </div>
 
-  <h3>Away Team</h3>
-  <button onclick="update('away_score', 1)">+1</button>
-  <button onclick="update('away_score', -1)">-1</button>
+    <div>
+        <button onclick="window.location.href='/end/{{ game.code }}'">End Game</button>
+    </div>
 
-  <script>
-    const socket = io();
+    <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
+    <script>
+        const socket = io();
+        const code = "{{ game.code }}";
+        socket.emit('join', { code });
 
-    // Send join event
-    socket.on('connect', () => {
-      socket.emit('join_game', { game_code: "{{ game_code }}" });
-    });
+        socket.on('game_updated', data => {
+            const u = data.updates;
+            if (u.game_clock !== undefined) document.getElementById('game_clock').value = u.game_clock;
+            if (u.shot_clock !== undefined) document.getElementById('shot_clock').value = u.shot_clock;
+            if (u.home_score !== undefined) document.getElementById('home_score').value = u.home_score;
+            if (u.away_score !== undefined) document.getElementById('away_score').value = u.away_score;
+        });
 
-    // Handle updates from server
-    socket.on('update_display', data => {
-      if (data.home_score !== undefined) {
-        document.getElementById('home_score_display')?.innerText = data.home_score;
-      }
-      if (data.away_score !== undefined) {
-        document.getElementById('away_score_display')?.innerText = data.away_score;
-      }
-      if (data.clock !== undefined) {
-        document.getElementById('clock').innerText = data.clock;
-      }
-      if (data.shot_clock !== undefined) {
-        document.getElementById('shot_clock').innerText = data.shot_clock;
-      }
-    });
+        function updateScore() {
+            socket.emit('update_game', {
+                code,
+                updates: {
+                    home_score: parseInt(document.getElementById('home_score').value),
+                    away_score: parseInt(document.getElementById('away_score').value),
+                }
+            });
+        }
 
-    // Emit score update
-    function update(field, change) {
-      socket.emit('update_score', {
-        game_code: "{{ game_code }}",
-        field: field,
-        change: change
-      });
-    }
-
-    // Clock controls
-    function startClock() {
-      socket.emit('clock_control', { action: 'start', game_code: "{{ game_code }}" });
-    }
-    function pauseClock() {
-      socket.emit('clock_control', { action: 'pause', game_code: "{{ game_code }}" });
-    }
-    function resetClock() {
-      socket.emit('clock_control', { action: 'reset', game_code: "{{ game_code }}" });
-    }
-
-    // Shot clock controls
-    function startShotClock() {
-      socket.emit('shot_clock_control', { action: 'start', game_code: "{{ game_code }}" });
-    }
-    function pauseShotClock() {
-      socket.emit('shot_clock_control', { action: 'pause', game_code: "{{ game_code }}" });
-    }
-    function resetShotClock() {
-      socket.emit('shot_clock_control', { action: 'reset', game_code: "{{ game_code }}" });
-    }
-  </script>
+        function sendClockControl(action) {
+            socket.emit('clock_control', {
+                code,
+                action
+            });
+        }
+    </script>
 </body>
 </html>

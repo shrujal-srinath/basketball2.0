@@ -1,16 +1,41 @@
+<!-- templates/home.html -->
 <!DOCTYPE html>
 <html>
-<head><title>Basketball Scoreboard</title></head>
+<head>
+    <title>Basketball Scoreboard</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
 <body>
-  <h1>Welcome</h1>
-  <form action="/create" method="post">
-    <input type="text" name="game_code" placeholder="Enter Game Code">
-    <button type="submit">Create Game</button>
-  </form>
+    <h1>🏀 Basketball Scoreboard</h1>
 
-  <form action="" onsubmit="event.preventDefault(); window.location.href='/display/' + document.getElementById('view_code').value;">
-    <input type="text" id="view_code" placeholder="Enter Game Code to Watch">
-    <button type="submit">Watch Game</button>
-  </form>
+    <h2>Create Game</h2>
+    <form action="/create" method="POST" enctype="multipart/form-data">
+        <label>Game Code:</label>
+        <input type="text" name="game_code" required><br><br>
+        <label>Home Logo:</label>
+        <input type="file" name="home_logo"><br><br>
+        <label>Away Logo:</label>
+        <input type="file" name="away_logo"><br><br>
+        <button type="submit">Create & Control Game</button>
+    </form>
+
+    <hr>
+
+    <h2>Watch Game</h2>
+    <form action="/watch" method="GET" onsubmit="goToWatch(event)">
+        <label>Enter Game Code:</label>
+        <input type="text" id="watch_code" required>
+        <button type="submit">Watch</button>
+    </form>
+
+    <script>
+        function goToWatch(e) {
+            e.preventDefault();
+            const code = document.getElementById('watch_code').value.trim().toUpperCase();
+            if (code) {
+                window.location.href = `/watch/${code}`;
+            }
+        }
+    </script>
 </body>
 </html>

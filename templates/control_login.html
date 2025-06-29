@@ -1,13 +1,14 @@
+<!-- templates/control_login.html -->
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Login to Control Game</title>
+    <title>Control Panel Login</title>
 </head>
 <body>
-  <h2>Enter Control Panel Password</h2>
-  <form method="POST">
-    <input type="password" name="password" placeholder="Password" required>
-    <button type="submit">Enter</button>
-  </form>
+    <h2>You must log in to control this game.</h2>
+    <form action="/control/{{ code }}" method="POST">
+        <input type="password" name="password" placeholder="Enter admin password" required>
+        <button type="submit">Login</button>
+    </form>
 </body>
 </html>

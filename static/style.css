@@ -1,0 +1,143 @@
+/* ===== General Styling ===== */
+body {
+  margin: 0;
+  padding: 0;
+  font-family: 'Arial Black', Gadget, sans-serif;
+  background-color: black;
+  color: white;
+  text-align: center;
+}
+
+h1, h2 {
+  margin: 10px;
+}
+
+/* ===== TV Display Layout ===== */
+.tv-display {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  height: 100vh;
+  padding: 20px;
+}
+
+.header {
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  padding-top: 20px;
+}
+
+.team-section {
+  flex: 1;
+  margin: 10px;
+  text-align: center;
+}
+
+.team-section img {
+  max-height: 80px;
+  margin: 0 10px;
+}
+
+.team-section h1 {
+  font-size: 3rem;
+  color: #00f0ff;
+}
+
+.team-section h2 {
+  font-size: 5rem;
+  color: yellow;
+}
+
+.team-section p {
+  font-size: 1.5rem;
+  margin: 5px;
+}
+
+/* ===== Clock Section ===== */
+.clock-section {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.big-clock {
+  font-size: 7rem;
+  color: yellow;
+  letter-spacing: 3px;
+}
+
+.shot-clock {
+  font-size: 5rem;
+  color: red;
+  margin-top: 10px;
+}
+
+/* Flash effect for 0 clock */
+.flash {
+  animation: flash 1s infinite;
+}
+
+@keyframes flash {
+  0%   { color: red; background-color: black; }
+  50%  { color: white; background-color: red; }
+  100% { color: red; background-color: black; }
+}
+
+/* ===== Footer ===== */
+.footer {
+  font-size: 2rem;
+  padding-bottom: 20px;
+  color: lime;
+}
+
+/* ===== Control Panel Styling ===== */
+form {
+  margin: 20px auto;
+  padding: 20px;
+  max-width: 600px;
+  border: 2px solid #fff;
+  border-radius: 10px;
+  background-color: #222;
+}
+
+form input[type="text"],
+form input[type="file"],
+form input[type="number"] {
+  font-size: 1rem;
+  padding: 8px;
+  margin: 8px;
+  width: 80%;
+}
+
+button {
+  margin: 10px;
+  padding: 12px 20px;
+  font-size: 1rem;
+  font-weight: bold;
+  border: none;
+  border-radius: 6px;
+  background-color: #00f0ff;
+  color: black;
+  cursor: pointer;
+  transition: 0.2s ease-in-out;
+}
+
+button:hover {
+  background-color: #0ff;
+}
+
+/* Logo previews in control panel */
+.logos img {
+  height: 80px;
+  margin: 0 10px;
+}
+
+/* Error message display */
+.error {
+  color: red;
+  font-weight: bold;
+  margin-top: 10px;
+}

@@ -1,38 +1,100 @@
+<!-- ✅ templates/display.html -->
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Scoreboard Display</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='static.css') }}">
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
+    <title>Live Scoreboard</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <style>
+        body {
+            background: black;
+            color: white;
+            font-family: 'Arial Black', sans-serif;
+            text-align: center;
+            padding: 2rem;
+        }
+        .scoreboard {
+            display: grid;
+            grid-template-columns: 1fr auto 1fr;
+            align-items: center;
+            gap: 2rem;
+            font-size: 3rem;
+        }
+        .logo img {
+            height: 100px;
+        }
+        .clock {
+            font-size: 6rem;
+        }
+        .shot-clock {
+            font-size: 4rem;
+            color: orange;
+        }
+        .flash {
+            animation: flash-red 1s steps(2, start) infinite;
+        }
+        @keyframes flash-red {
+            0% { background: black; }
+            50% { background: red; }
+            100% { background: black; }
+        }
+    </style>
 </head>
 <body>
-  <div class="scoreboard">
-    <h1 id="clock">00:00</h1>
-    <div class="teams">
-      <div>
-        <h2 id="home_name">Home</h2>
-        <h3 id="home_score">0</h3>
-      </div>
-      <div>
-        <h2 id="away_name">Away</h2>
-        <h3 id="away_score">0</h3>
-      </div>
+    <div class="scoreboard">
+        <div class="logo">
+            {% if game.home_logo %}<img src="/{{ game.home_logo }}">{% endif %}
+            <div>{{ game.home_name }}</div>
+            <div id="home_score">{{ game.home_score }}</div>
+        </div>
+        <div>
+            <div id="game_clock" class="clock">{{ game.game_clock }}</div>
+            <div id="shot_clock" class="shot-clock">{{ game.shot_clock }}</div>
+        </div>
+        <div class="logo">
+            {% if game.away_logo %}<img src="/{{ game.away_logo }}">{% endif %}
+            <div>{{ game.away_name }}</div>
+            <div id="away_score">{{ game.away_score }}</div>
+        </div>
     </div>
-  </div>
 
-  <script>
-    const socket = io();
-    const gameCode = "{{ game_code }}";
+    <audio id="buzzer" src="/static/buzzer.mp3"></audio>
 
-    socket.on('connect', () => {
-      socket.emit('join_game', { game_code: gameCode });
-    });
+    <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
+    <script>
+        const socket = io();
+        const code = "{{ game.code }}";
+        const buzzer = document.getElementById('buzzer');
+        const gameClockEl = document.getElementById('game_clock');
+        const shotClockEl = document.getElementById('shot_clock');
 
-    socket.on('update_display', data => {
-      if (data.home_score !== undefined) document.getElementById('home_score').innerText = data.home_score;
-      if (data.away_score !== undefined) document.getElementById('away_score').innerText = data.away_score;
-      if (data.clock !== undefined) document.getElementById('clock').innerText = data.clock;
-    });
-  </script>
+        socket.emit('join', { code });
+
+        socket.on('game_updated', data => {
+            const u = data.updates;
+
+            if (u.home_score !== undefined) document.getElementById('home_score').textContent = u.home_score;
+            if (u.away_score !== undefined) document.getElementById('away_score').textContent = u.away_score;
+
+            if (u.game_clock !== undefined) {
+                gameClockEl.textContent = u.game_clock;
+                if (u.game_clock === '00:00') {
+                    gameClockEl.classList.add('flash');
+                    buzzer.play();
+                } else {
+                    gameClockEl.classList.remove('flash');
+                }
+            }
+
+            if (u.shot_clock !== undefined) {
+                shotClockEl.textContent = u.shot_clock;
+                if (u.shot_clock === 0) {
+                    shotClockEl.classList.add('flash');
+                    buzzer.play();
+                } else {
+                    shotClockEl.classList.remove('flash');
+                }
+            }
+        });
+    </script>
 </body>
 </html>
