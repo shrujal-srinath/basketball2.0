@@ -10,21 +10,15 @@ from werkzeug.utils import secure_filename
 app = Flask(__name__)
 app.secret_key = 'super_secret_key'
 app.config['UPLOAD_FOLDER'] = 'static/uploads'
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///instance/games.db'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///games.db'  # Fixed: now in root folder
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 socketio = SocketIO(app, async_mode='eventlet')
 
-# --- Ensure upload folder exists robustly (fixes FileExistsError) ---
-upload_dir = app.config['UPLOAD_FOLDER']
-if os.path.exists(upload_dir):
-    if not os.path.isdir(upload_dir):
-        os.remove(upload_dir)
-        os.makedirs(upload_dir)
-else:
-    os.makedirs(upload_dir)
-
-# --- Ensure database folder exists ---
-os.makedirs("instance", exist_ok=True)
+# --- Ensure upload folder exists (skip if it exists) ---
+try:
+    os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+except FileExistsError:
+    pass  # safe fallback
 
 # --- DB Setup ---
 db = SQLAlchemy(app)
@@ -59,11 +53,11 @@ def create():
         code = request.form['code'].strip().lower()
         if Game.query.get(code):
             return "Game code already exists"
-        
+
         home_team = request.form['home_team']
         away_team = request.form['away_team']
         password = request.form.get('password', '')
-        
+
         # Handle logo upload
         home_logo = request.files.get('home_logo')
         away_logo = request.files.get('away_logo')
@@ -151,8 +145,7 @@ def on_update(data):
 def on_buzzer(data):
     emit('buzzer', {}, to=data['code'])
 
-# --- Dynamic Port Handling for local + Render support ---
-
+# --- Dynamic Port Handling ---
 def find_free_port(start_port=5000, max_tries=10):
     for port in range(start_port, start_port + max_tries):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
