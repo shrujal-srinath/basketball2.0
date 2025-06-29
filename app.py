@@ -8,7 +8,14 @@ app = Flask(__name__)
 app.secret_key = "super_secret_key"
 app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///instance/games.db"
 app.config["UPLOAD_FOLDER"] = os.path.join("static", "uploads")
-os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
+# Old version (causing the error)
+# os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
+
+# ✅ Safe version
+upload_folder = app.config["UPLOAD_FOLDER"]
+if not os.path.exists(upload_folder):
+    os.makedirs(upload_folder)
+
 os.makedirs("instance", exist_ok=True)
 
 db = SQLAlchemy(app)
